@@ -1,0 +1,6 @@
+# Laptop / PC side: image preprocessing, YOLOv8 inference, coordinate mapping.
+# Tested-era minimums; exact versions used during the project were not recorded.
+# Python 3.10-3.12 recommended (PyTorch wheels lag behind the newest Python releases).
+ultralytics>=8.0
+opencv-python>=4.8
+numpy>=1.24

@@ -1,0 +1,4 @@
+# Raspberry Pi side: camera capture, stepper/servo/DC-motor control.
+# Also requires the system camera tool `rpicam-still` (Raspberry Pi OS package: rpicam-apps).
+RPi.GPIO>=0.7
+numpy>=1.24
