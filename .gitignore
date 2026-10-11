@@ -23,3 +23,6 @@ src/*.png
 Thumbs.db
 .vscode/
 .idea/
+
+# Local git-history backups (keep outside the repo)
+_git_history_backups_*/
