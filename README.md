@@ -23,21 +23,24 @@ Floating photovoltaic (FPV) panels in coastal environments lose output as salt c
 | Metric | Result | Test conditions |
 |---|---|---|
 | Mean positioning error | **0.65 cm** (measured) | A reference sticker was placed at 10 known points across the 30.8 × 21.1 cm panel. The system drove the sponge to each point using the full coordinate-mapping and motor pipeline, and the offset was measured with a ruler. Range 0.48–0.83 cm; all 10 points were below the 1.0 cm target and well inside the 1.9 cm sponge radius. |
-| Motor runtime reduction | **~68%** (estimated) | Selective cleaning of a 6-target scenario (24 s motor runtime) compared with a *calculated* full-surface traversal baseline (10 X steps × 6.8 s + 5 Y steps × 1.2 s = 74 s, rounded to 75 s in the report). |
-| Cleaning trials | 18 trials, ~78% mean removal | Light, moderate, and heavy salt contamination |
+| Motor runtime reduction | **~68%** (one 6-target test scenario) | Selective cleaning of a 6-target layout used **24 s** of motor runtime on the rig. The full-surface baseline of **75 s** is built from the measured single-pass axis travel times (10 X passes × 6.8 s + 5 Y moves × 1.2 s = 74 s, rounded to 75 s in the report). Reduction = (75 − 24) / 75 ≈ 68%. This is a single sparse scenario, not an average over repeated tests; the saving shrinks as the number of targets grows (see [Limitations](#limitations)). |
 
-Figures are from the final research report ([`docs/CDE2605R_public.pdf`](docs/CDE2605R_public.pdf), Section 7). Experiments were run on a single-panel laboratory mockup under controlled lighting. Detection accuracy metrics are being re-verified against the original evaluation records and will be added once confirmed.
+The positioning and runtime figures are from the final research report ([`docs/CDE2605R_public.pdf`](docs/CDE2605R_public.pdf), Section 7). Experiments were run on a single-panel laboratory mockup under controlled lighting.
+
+**Detection metrics.** The final report quotes different YOLOv8 precision / recall / mAP values and test-set sizes in different sections, so those figures are not repeated here. The training metadata stored in [`models/best.pt`](models/best.pt) records the final validation result of the deployed model as precision 0.92, recall 0.63 and mAP@0.5 0.73 on the training run's validation split (the split size is not recorded in this repository). No separate held-out test evaluation is included.
 
 ---
 
 ## My Contribution
 
-I (**Cao Jiashuo**) was responsible for the software and the software–hardware integration:
+This was a four-member team project. My (**Cao Jiashuo**) responsibilities were software development, computer-vision integration, system integration, and team coordination:
 
-- **Image recognition:** YOLOv8 salt-residue detection pipeline
-- **Image preprocessing:** white balance, exposure normalisation, glare suppression, CLAHE, and four-tile perspective rectification
-- **Motion control:** stepper-motor (X/Y) and servo control, coordinate mapping, and cleaning-path planning
-- **System integration:** the distributed Raspberry Pi ↔ laptop orchestrator that runs the full capture → detect → plan → clean cycle
+- **System integration and software:** designed and wrote [`fpv_main_orchestrator.py`](src/fpv_main_orchestrator.py), which runs the full capture → detect → plan → clean cycle across the Raspberry Pi and the laptop: the length-prefixed TCP protocol, image transfer overlapped with X-axis homing, column-chained target execution on the Pi, and fail-safe motor shutdown.
+- **Computer-vision integration:** built the four-position capture workflow, the per-position perspective calibration tool and rectification ([`manual_calibrate_four_tiles.py`](src/manual_calibrate_four_tiles.py), [`fix_2_preprocess.py`](src/fix_2_preprocess.py)), and the batch preprocess-and-detect script ([`run_pair_preprocess_detect.py`](src/run_pair_preprocess_detect.py)). These build on preprocessing functions and a YOLOv8n model developed within the team's research repository.
+- **Coordinate mapping and planning:** extended the team's coordinate-mapping script ([`shuo.py`](src/shuo.py)) to the four-tile layout and connected its disk-pack target merging, column ordering and motor-frame compensation to the networked execution path.
+- **Team coordination and documentation:** coordinated integration and testing across the subsystems and compiled the project documentation.
+
+The mechanical structure, electrical build, base preprocessing functions and model training were shared team work and are not claimed here as my individual work.
 
 ---
 
@@ -63,7 +66,9 @@ The work is split by hardware capability: the **Pi** handles everything physical
 
 ### Distributed communication
 
-The two nodes talk over a lightweight custom TCP protocol (port 5001). Every message is **length-prefixed** (8-byte big-endian header + payload), so images and JSON share one connection without delimiter ambiguity.
+At runtime the two nodes talk over a lightweight custom TCP protocol (port 5001). Every message is **length-prefixed** (8-byte big-endian header + payload), so images and JSON share one connection without delimiter ambiguity. All captured images and all cleaning targets travel over this TCP link.
+
+**SSH / SCP** was the development and deployment channel, not part of the runtime data path: updated scripts (`fpv_main_orchestrator.py`, `shuo.py`, hardware test scripts) were copied to the Pi with `scp`, and individual captures were pulled back to the laptop with `scp` for perspective calibration and debugging.
 
 ```mermaid
 sequenceDiagram
@@ -159,7 +164,8 @@ then shifted by a calibrated camera-to-sponge offset (+1.8 cm in Y).
 - **Fixed calibration:** perspective points and physical constants are hard-coded for one rig; moving the camera means recalibrating (see [`docs/usage.md`](docs/usage.md#4-calibration)).
 - **Bounding boxes, not masks:** box-based detection over-covers irregular residue; segmentation is listed as future work.
 - **Lab-grade networking:** the TCP link has no authentication or encryption.
-- **Calculated baseline:** the 68% runtime reduction is measured against a calculated, not measured, full-surface baseline.
+- **Runtime saving is scenario-specific:** the 68% figure comes from one sparse 6-target scenario, and the full-surface baseline is built from per-axis travel times rather than timed as one continuous full-surface run. Selective cleaning costs roughly 4 s per target, so the saving shrinks as targets increase; my individual UREx report puts the break-even point at about 15–20 targets.
+- **Detection evaluation:** detection quality has only been characterised on the training run's validation split; no separate held-out test evaluation is included.
 
 ---
 
